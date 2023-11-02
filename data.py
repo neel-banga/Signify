@@ -4,7 +4,6 @@ from PIL import Image, ImageFilter
 import numpy as np
 from random import randint
 
-
 def image_to_folder():
    for f in os.listdir():
        if f.endswith('.png'):
@@ -75,3 +74,7 @@ def remove_files(blur = False, rotation = False, original = False):
                if original: os.remove(os.path.join(os.getcwd(), 'LETTERS', fd, f'{letter}.png'))
 '''
 remove_files(blur = True, rotation = True)
+
+for folder in os.listdir('ASL_Alphabet_Dataset/asl_alphabet_test'):
+    for file in os.listdir(folder):
+        file

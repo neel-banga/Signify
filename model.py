@@ -1,133 +1,192 @@
+from ultralytics import YOLO
+from roboflow import Roboflow
 import torch
-from torchvision import transforms, datasets
-import torch.nn as nn
-import torch.optim as optim
+import cv2
+from torchvision import transforms
 from PIL import Image
 import os
-from gtts import gTTS
-from playsound import playsound
 import time
-import cv2
+import numpy as np
 
-def say(words):
-    tts = gTTS(text=words, lang='en-au', slow=False)
-    tts.save("output.mp3")
-    playsound("output.mp3")
+rf = Roboflow(api_key="GjOibvXZTUUkYq5FHPvo")
+project = rf.workspace().project("american-sign-language-letters")
 
+def download_dataset():
+    rf = Roboflow(api_key="GjOibvXZTUUkYq5FHPvo")
+    project = rf.workspace("neel-hjdrl").project("sing-language-vghln")
+    dataset = project.version(1).download("yolov8")
+    return dataset
+
+def train_model():
+    dataset = download_dataset()
+
+    model = 'yolov8n.pt'
+    epochs = 25
+    imgsz = 640
+    batch = 8
+    data = f'{dataset.location}/data.yaml'
+
+    model = YOLO(model)
+
+    results = model.train(data=data, epochs=5)
+    results = model.val()
+
+    return model
+
+img_transforms = transforms.Compose([
+   transforms.Resize((600, 600)),
+   transforms.Grayscale()
+])
+
+
+def get_letter_from_path(model_path, path):
+
+  model = YOLO(model_path)
+
+  img = Image.open(path)
+  img = img.resize((640, 640))
+  img = img.convert('L')
+  
+  print(model.predict(img))  
+
+  return model.predict(img)
+
+def get_letter(model_path, img):
+
+  model = YOLO(model_path)
+
+  img = img.resize((600, 600))
+  img = img.convert('L')
+
+  return model.predict(img)
+'''
+results = get_letter_from_path('best.pt', 'Sing-Language-1/test/images/R18_jpg.rf.ee82b380feab18cc5c6a31a956dac18a.jpg')
+
+
+annotated_frame = results[0].plot()
+cv2.imshow('yay', annotated_frame)
+cv2.waitKey(0)
+
+
+boxes = results[0].boxes
+box = boxes[0]
+label = int(box.cls)
+confidence = float(box.conf)
+
+print(label, confidence)
 
 alpha = {}
 current_number = 0
 
-# - = del
-# ! = nothing
-# + = space
-for char in 'abcdefghijklmnopqrstuvwxyz-!+':
+for char in 'abcdefghijklmnopqrstuvwxyz':
     alpha[current_number] = char
     current_number += 1
 
-
-img_transforms = transforms.Compose([
-   transforms.Resize((50, 50)),
-   transforms.Grayscale(),
-   transforms.ToTensor()
-])
-
-training = datasets.ImageFolder('ASL_Alphabet_Dataset/asl_alphabet_train', transform=img_transforms)
-train_loader = torch.utils.data.DataLoader(training, batch_size=10, shuffle=True)
-
-class Model(nn.Module):
-   def __init__(self):
-       super().__init__()
-
-       self.convolution = nn.Sequential(
-           nn.Conv2d(1, 64, (5, 5)),
-           nn.ReLU(),
-           nn.Conv2d(64, 64, (5, 5)),
-           nn.ReLU(),
-           nn.Conv2d(64, 64, (5, 5)),
-           nn.ReLU(),
-           nn.Flatten(),
-           nn.Linear(92416, 30)
-       )
-
-   def forward(self, x):
-       return self.convolution(x)
-  
-def train_model():
-   model = Model()
-   opt = optim.Adam(model.parameters(), lr = 0.00001)
-   loss_fn = nn.CrossEntropyLoss()
-
-   for epoch in range(5):
-       for batch in train_loader:
-           X, y = batch
-           output = model(X)          
-           loss = loss_fn(output, y)
-           opt.zero_grad()
-           loss.backward()
-           opt.step()
-
-       print(f'LOSS: {loss}')
-       torch.save(model.state_dict(), 'model.pth')
-
-#train_model()
-'''
-model = Model()
-model.load_state_dict(torch.load('model.pth'))
-
-print(alpha)
-
-img = Image.open('ASL_Alphabet_Dataset/asl_alphabet_train/nothing/nothing3.jpg')
-img_transformed = img_transforms(img)
-img_batch = img_transformed.unsqueeze(0)
-output = model(img_batch)
-predicted_class = torch.argmax(output)
-print(predicted_class.item())
-
-letter = alpha[predicted_class.item()]
+letter = alpha[label]
 print(letter)
-
-base_dir = 'ASL_Alphabet_Dataset/asl_alphabet_test'
-for i in os.listdir(base_dir):
-    
-    img = Image.open(os.path.join(base_dir, i))
-    img_transformed = img_transforms(img)
-    img_batch = img_transformed.unsqueeze(0)
-    output = model(img_batch)
-    predicted_class = torch.argmax(output)
-
-    letter = alpha[predicted_class.item()]
-    ans = i.replace('_test.jpg', '')
-    print(f'GUESS: {letter}, ANSWER: {ans}')
 '''
+def load_yolo_model(model_path='model_files/runs/detect/train2/weights/last.pt'):
+    model = YOLO(model_path)
+    return model
 
-def get_sentance():
-    sentance = ''
-    model = Model()
-    model.load_state_dict(torch.load('model.pth'))
-    start_time = time.time()
+def detect_sign_language(model, frame):
+    # Resize and convert the frame to the appropriate format
+    img = Image.fromarray(frame)
+    img = img.resize((640, 640))
+    img = img.convert('L')
+
+    # Perform object detection using YOLO
+    results = model.predict(img)
+
+    return results
+
+def det1():
+    model = load_yolo_model('/Users/neelbanga/Documents/Coding/CongressionalApp/model_files/runs/detect/train2/weights/best.pt')
+
+    # Open a connection to the webcam (usually camera index 0)
     cap = cv2.VideoCapture(0)
-    while time.time() - start_time < 25:
-        for i in range(5):
-            print(i)
-            time.sleep(1)
+    cv2.resizeWindow("window", 640, 640) 
+
+    while True:
+        # Capture a frame from the webcam
         ret, frame = cap.read()
+        time.sleep(2)
 
-        cv2.imshow('Frame', frame) 
-        cv2.imwrite('frame.jpg', frame)
-        
+        if not ret:
+            break
 
-        img = Image.open('frame.jpg')
-        img_transformed = img_transforms(img)
-        img_batch = img_transformed.unsqueeze(0)
-        output = model(img_batch)
-        predicted_class = torch.argmax(output)
-        letter = alpha[predicted_class.item()]
-        print(letter)
-        sentance += letter
+        # Detect sign language in the frame
+        results = detect_sign_language(model, frame)
+
+        # Draw bounding boxes and labels on the frame
+        for result in results:
+            annotated_frame = result.plot()
+            frame = np.array(annotated_frame)
+
+        return frame, results
+
+        # Display the frame with detections
+        cv2.imshow('Sign Language Detection', frame)
+
+        # Break the loop when 'q' is pressed
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    # Release the webcam and close OpenCV windows
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+model = project.version(6).model
+cap = cv2.VideoCapture(0)
+def det2():
+
+    ret, frame = cap.read()
+
+    if not ret:
+        return
+
+    cv2.imwrite('img.jpg', frame) 
+    # Detect sign language in the frame
+    pred = model.predict("img.jpg", confidence=40, overlap=30)
+    results = pred.json()
+    pred.save("prediction.jpg")
+    print(results)
+    return results
     
-    return sentance
+def get_letter_from_path(path):
 
-s = get_sentance()
-print(s)
-say(s)
+    model = project.version(6).model
+    results = model.predict(path, confidence=40, overlap=30).json()
+    model.predict(path, confidence=40, overlap=30).save("prediction.jpg")
+
+    for i in results['predictions']:
+        _class = i['class']
+        _conf = i['confidence']
+
+        return _class
+
+
+def detection():
+
+    model = project.version(6).model
+
+    # Open a connection to the webcam (usually camera index 0)
+    cap = cv2.VideoCapture(0)
+    cv2.resizeWindow("window", 640, 640) 
+
+    while True:
+        # Capture a frame from the webcam
+        ret, frame = cap.read()
+        #time.sleep(2)
+
+        if not ret:
+            break
+
+        cv2.imwrite('img.jpg', frame) 
+        # Detect sign language in the frame
+        results = model.predict("img.jpg", confidence=40, overlap=30).json()
+        model.predict("img.jpg", confidence=40, overlap=30).save("prediction.jpg")
+        frame = Image.open('prediction.jpg')
+
+        cv2.imshow('Sign Language Detection', frame)
